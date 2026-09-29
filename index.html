@@ -3287,18 +3287,24 @@ async function dbPut(storeName,data){
   if(String(storeName)==='settings'){window.__posSettingsCache=null;window.__posSettingsCacheAt=0;}
   if(!_useSupabase || !navigator.onLine){
     const id=await _dbPutLocal(storeName,data);
-    _offlineQueueAdd('put',storeName,data,id);
+    // Preserve the exact locally assigned ID in the sync payload. Without this,
+    // records created offline without an explicit ID could be duplicated on sync.
+    const queuedData=Object.assign({},data||{},{id});
+    _offlineQueueAdd('put',storeName,queuedData,id);
     return id;
   }
   try{
     const id=await _dbPutSupabase(storeName,data);
-    await _dbPutLocal(storeName,data);
+    const saved=Object.assign({},data||{},{id});
+    await _dbPutLocal(storeName,saved);
     return id;
   }catch(e){
-    await _dbPutLocal(storeName,data);
-    _offlineQueueAdd('put',storeName,data,data?.id);
+    const id=data?.id || (typeof uid==='function'?uid():crypto.randomUUID());
+    const saved=Object.assign({},data||{},{id});
+    await _dbPutLocal(storeName,saved);
+    _offlineQueueAdd('put',storeName,saved,id);
     await _cloudFailedToLocal(e).catch(()=>{});
-    return data?.id;
+    return id;
   }
 }
 async function dbGet(storeName,id){
