@@ -211,7 +211,7 @@ img { max-width: 100%; }
   padding: 20px 16px 12px;
   text-align: center;
 }
-.logo-icon { font-size: 2.2rem; margin-bottom: 6px; }
+.logo-icon { font-size: 2.2rem; margin-bottom: 6px; display:flex; justify-content:center; } .adi-sidebar-logo{width:92px;height:92px;object-fit:cover;border-radius:18px;display:block;}
 .sidebar-logo h2 {
   font-size: .82rem; font-weight: 800;
   color: var(--primary);
@@ -2631,16 +2631,12 @@ for delete to anon using (true);
 </style>
 
   <link rel="manifest" href="./manifest.json">
-  <meta name="theme-color" content="#0F766E">
+  <meta name="theme-color" content="#14532d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="icon" href="./icons/icon-32.png" type="image/png">
-
-<link rel="manifest" href="./manifest.webmanifest">
-<meta name="theme-color" content="#8b0000">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="icon" href="./icon-32.png" type="image/png">
-<link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
 
 
 <style id="customer-login-visibility-fix">
@@ -2904,25 +2900,6 @@ body.erp-staff-mode .customer-compliment-fab { display:none!important; }
 .pos-food-filter{border:1px solid rgba(0,0,0,.12);background:#f7f8f6;color:#253128;padding:9px 13px;border-radius:999px;font-weight:800;cursor:pointer;transition:.15s}
 .pos-food-filter:hover,.pos-food-filter.active{background:#e7b84b;color:#171208;border-color:#e7b84b}
 </style>
-<link rel="manifest" href="./manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
-<link rel="apple-touch-icon" href="./icons/icon-180.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Adi Kitchen">
-<meta name="theme-color" content="#0f5f24">
-<style id="adi-pwa-brand-logo">
-.brand-mark,.logo-icon,.customer-public-mark{overflow:hidden!important;background:#0f5f24!important;color:transparent!important;display:grid!important;place-items:center!important;border-radius:14px!important}
-.brand-mark img,.logo-icon img,.customer-public-mark img{width:100%!important;height:100%!important;object-fit:cover!important;display:block!important}
-.logo-icon{width:54px!important;height:54px!important;border-radius:14px!important}
-.sidebar-logo .logo-icon{font-size:0!important}
-.brand-mark{width:92px!important;height:92px!important;font-size:0!important}
-.customer-public-mark{font-size:0!important}
-.customer-public-mark img{border-radius:inherit}
-#adi-offline-sync-badge{font-family:system-ui,-apple-system,Segoe UI,sans-serif}
-</style>
 </head>
 <body>
 
@@ -2990,7 +2967,7 @@ body.erp-staff-mode .customer-compliment-fab { display:none!important; }
   <div id="sidebar">
     <button class="sidebar-close-btn" id="sidebar-close-btn" type="button" aria-label="Close menu" onclick="closeSidebarMobile()">✕</button>
     <div class="sidebar-logo">
-      <div class="logo-icon">🍽️</div>
+      <div class="logo-icon"><img src="./adi-kitchen-logo.png" alt="Adi Kitchen" class="adi-sidebar-logo"></div>
       <h2>ADI KITCHEN<br>ETHIOPIAN<br>RESTAURANT</h2>
       <small>የሀዋሳ ኢትዮጵያዊ ሬስቶራንት</small>
     </div>
@@ -3095,6 +3072,70 @@ function supabaseSetupError(){
   return new Error('Supabase is not configured. Add your Supabase Project URL and anon/public key in HAWASSA_SUPABASE_CONFIG.');
 }
 
+
+/* ============================================================
+   ADI KITCHEN OFFLINE-FIRST SYNC
+   Keeps the same Supabase project, but stores local changes and
+   uploads them automatically when the connection returns.
+   ============================================================ */
+const ADI_OFFLINE_QUEUE_KEY='adi_kitchen_offline_sync_v1';
+function _offlineQueueRead(){
+  try{const a=JSON.parse(localStorage.getItem(ADI_OFFLINE_QUEUE_KEY)||'[]');return Array.isArray(a)?a:[];}catch(e){return [];}
+}
+function _offlineQueueWrite(a){try{localStorage.setItem(ADI_OFFLINE_QUEUE_KEY,JSON.stringify(a||[]));}catch(e){}}
+function _offlineQueueAdd(op,storeName,data,id){
+  const q=_offlineQueueRead();
+  const entry={op,storeName:String(storeName),data:data||null,id:id==null?null:String(id),queued_at:new Date().toISOString()};
+  // Collapse repeated writes/deletes for the same record so one offline order
+  // does not generate unnecessary duplicate network requests.
+  const key=`${entry.op}:${entry.storeName}:${entry.id||''}`;
+  const idx=q.findIndex(x=>`${x.op}:${x.storeName}:${x.id||''}`===key);
+  if(idx>=0) q[idx]=entry; else q.push(entry);
+  _offlineQueueWrite(q);
+  return entry;
+}
+let _offlineFlushPromise=null;
+async function flushAdiKitchenOfflineQueue(){
+  if(!navigator.onLine || _offlineFlushPromise) return;
+  _offlineFlushPromise=(async()=>{
+    try{
+      if(!_supabaseClient || !_useSupabase){
+        const c=await initSupabase();
+        if(!c || !_useSupabase) return;
+      }
+      let q=_offlineQueueRead();
+      if(!q.length)return;
+      const remaining=[];
+      for(const item of q){
+        try{
+          if(item.op==='put') await _dbPutSupabase(item.storeName,item.data);
+          else if(item.op==='delete') await _dbDeleteSupabase(item.storeName,item.id);
+          else if(item.op==='clear') await _dbClearSupabase(item.storeName);
+          if(item.op==='put') await _dbPutLocal(item.storeName,item.data);
+          else if(item.op==='delete') await _dbDeleteLocal(item.storeName,item.id);
+          else if(item.op==='clear') await _dbClearLocal(item.storeName);
+        }catch(e){
+          remaining.push(item);
+          break;
+        }
+      }
+      // Keep any entries after the first failed entry as well.
+      const processed=q.length-remaining.length;
+      if(remaining.length<q.length) {
+        const tail=q.slice(processed);
+        _offlineQueueWrite(remaining.concat(tail));
+      } else {
+        _offlineQueueWrite(remaining);
+      }
+    }catch(e){console.warn('Offline sync postponed:',e);}
+    finally{_offlineFlushPromise=null;}
+  })();
+  return _offlineFlushPromise;
+}
+window.addEventListener('online',()=>{
+  setTimeout(()=>{ flushAdiKitchenOfflineQueue(); },500);
+});
+
 function _localStoreKey(storeName){ return 'hawassa_erp_local_v2_'+String(storeName); }
 function _localRead(storeName){ try{ const raw=localStorage.getItem(_localStoreKey(storeName)); const arr=raw?JSON.parse(raw):[]; return Array.isArray(arr)?arr:[]; }catch(e){ console.warn('Local ERP storage read failed:',e); return []; } }
 function _localWrite(storeName,rows){ try{ localStorage.setItem(_localStoreKey(storeName),JSON.stringify(rows||[])); }catch(e){ console.warn('Local ERP storage write failed:',e); } }
@@ -3144,9 +3185,8 @@ function loadSupabaseSDK(){
 
 async function initSupabase(){
   if(_supabaseClient && _useSupabase) return _supabaseClient;
-  if(!navigator.onLine){
+  if(navigator.onLine===false){
     _useSupabase=false; _dbInstance=null; _databaseReady=true;
-    console.info('Offline mode: using the local ERP cache.');
     return null;
   }
   try{
@@ -3164,7 +3204,6 @@ async function initSupabase(){
     _supabaseClient=window.supabase.createClient(window.HAWASSA_SUPABASE_CONFIG.url,window.HAWASSA_SUPABASE_CONFIG.anonKey);
     _useSupabase=true; _dbInstance=_supabaseClient; _databaseReady=true; _supabaseLastError=null;
     console.log('Supabase shared database ready.');
-    setTimeout(()=>{ try{ _syncOfflineQueue(); _refreshLocalCacheFromCloud(); }catch(e){} }, 50);
     return _supabaseClient;
   }catch(error){
     _supabaseLastError=error;
@@ -3243,164 +3282,98 @@ function _dbAllInvalidate(storeName){
   _dbAllInFlight.delete(k);
   _dbSessionInvalidate(k);
 }
-/* ========== OFFLINE-FIRST SYNC LAYER ========== */
-const OFFLINE_QUEUE_KEY='adi_kitchen_offline_queue_v1';
-const OFFLINE_META_KEY='adi_kitchen_offline_meta_v1';
-let _offlineSyncRunning=false;
-function _offlineQueueRead(){try{const x=JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY)||'[]');return Array.isArray(x)?x:[];}catch(e){return[];}}
-function _offlineQueueWrite(q){try{localStorage.setItem(OFFLINE_QUEUE_KEY,JSON.stringify(q||[]));}catch(e){console.warn('Offline queue storage failed:',e);}}
-function _offlineEnqueue(op,storeName,id,data){
-  const q=_offlineQueueRead();
-  const item={qid:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random()),op,store:String(storeName),id:id!=null?String(id):null,data:data||null,queued_at:new Date().toISOString()};
-  /* Coalesce repeated writes to the same record while offline. */
-  const key=item.store+'|'+String(item.id);
-  for(let i=q.length-1;i>=0;i--){
-    if(q[i].store+'|'+String(q[i].id)===key){
-      if(op==='put' && q[i].op==='put'){q[i]=item;_offlineQueueWrite(q);_updateOfflineBadge();return;}
-      if(op==='delete'){q.splice(i,1);break;}
-    }
-  }
-  q.push(item);_offlineQueueWrite(q);_updateOfflineBadge();
-}
-function _offlineQueueCount(){return _offlineQueueRead().length;}
-function _offlineMarkMeta(extra){try{const m=JSON.parse(localStorage.getItem(OFFLINE_META_KEY)||'{}');localStorage.setItem(OFFLINE_META_KEY,JSON.stringify({...m,...extra}));}catch(e){}}
-function _offlineIsOnline(){return navigator.onLine!==false;}
-function _offlineToastOnce(message,type='info'){
-  const key='__adiOfflineToast_'+message;
-  if(window[key])return;window[key]=true;
-  try{if(typeof toast==='function')toast(message,type);}catch(e){}
-  setTimeout(()=>{window[key]=false;},8000);
-}
-function _updateOfflineBadge(){
-  const n=_offlineQueueCount();
-  let b=document.getElementById('adi-offline-sync-badge');
-  if(!b){b=document.createElement('div');b.id='adi-offline-sync-badge';b.style.cssText='position:fixed;right:12px;bottom:12px;z-index:100000;display:none;padding:9px 12px;border-radius:999px;background:#fff3cd;color:#6b4b00;border:1px solid #e6c66b;box-shadow:0 8px 24px rgba(0,0,0,.14);font:800 12px/1.2 system-ui;';document.body.appendChild(b);}
-  const offline=n>0 || navigator.onLine===false;
-  if(!offline){b.style.display='none';return;}
-  b.style.display='block';
-  b.textContent=n?`Offline • ${n} change${n===1?'':'s'} waiting to sync`:'Offline • local mode';
-}
-async function _cacheStore(storeName,rows){
-  if(!Array.isArray(rows))return;
-  try{_localWrite(storeName,rows);_offlineMarkMeta({lastCacheAt:new Date().toISOString()});}catch(e){console.warn('Offline cache update failed:',e);}
-}
-async function _syncOfflineQueue(){
-  if(_offlineSyncRunning || !_offlineIsOnline || !_supabaseClient || !_useSupabase)return;
-  const q=_offlineQueueRead(); if(!q.length){_updateOfflineBadge();return;}
-  _offlineSyncRunning=true;
-  try{
-    for(const item of q.slice()){
-      if(!_offlineIsOnline)break;
-      try{
-        if(item.op==='put') await _dbPutSupabase(item.store,item.data||{});
-        else if(item.op==='delete') await _dbDeleteSupabase(item.store,item.id);
-        else continue;
-        const now=_offlineQueueRead().filter(x=>x.qid!==item.qid);_offlineQueueWrite(now);
-      }catch(e){
-        console.warn('Offline sync paused:',e);break;
-      }
-    }
-    _offlineMarkMeta({lastSyncAt:new Date().toISOString()});
-    if(_offlineQueueCount()===0)_offlineToastOnce('Offline changes synced to the restaurant database.','success');
-  }finally{_offlineSyncRunning=false;_updateOfflineBadge();}
-}
-async function _refreshLocalCacheFromCloud(){
-  if(!_supabaseClient || !_useSupabase || !_offlineIsOnline)return;
-  for(const storeName of Object.values(STORES)){
-    try{const rows=await _dbGetAllSupabase(storeName);await _cacheStore(storeName,rows);}catch(e){console.warn('Offline cache refresh skipped:',storeName,e);}
-  }
-}
-async function _goOnlineAndSync(){
-  if(!_offlineIsOnline)return;
-  try{
-    _databaseReady=false;_supabaseClient=null;_useSupabase=false;
-    await initSupabase();
-    if(_useSupabase){await _syncOfflineQueue();await _refreshLocalCacheFromCloud();}
-  }catch(e){console.warn('Online sync retry failed:',e);}
-  _updateOfflineBadge();
-}
-window.addEventListener('online',()=>{setTimeout(_goOnlineAndSync,300);});
-window.addEventListener('offline',()=>{_useSupabase=false;_databaseReady=true;_updateOfflineBadge();_offlineToastOnce('Internet is off. Orders and changes will be saved on this device and synced automatically when internet returns.','warning');});
-
 async function dbPut(storeName,data){
   await ensureDatabaseReady(); _dbAllInvalidate(storeName);
   if(String(storeName)==='settings'){window.__posSettingsCache=null;window.__posSettingsCacheAt=0;}
-  if(!_useSupabase){
+  if(!_useSupabase || !navigator.onLine){
     const id=await _dbPutLocal(storeName,data);
-    _offlineEnqueue('put',storeName,id,data);
-    _updateOfflineBadge();
+    _offlineQueueAdd('put',storeName,data,id);
     return id;
   }
   try{
     const id=await _dbPutSupabase(storeName,data);
-    const saved=await _dbGetSupabase(storeName,id).catch(()=>data);
-    await _dbPutLocal(storeName,saved||data);
+    await _dbPutLocal(storeName,data);
     return id;
   }catch(e){
-    await _cloudFailedToLocal(e);
-    const id=await _dbPutLocal(storeName,data);
-    _offlineEnqueue('put',storeName,id,data);
-    _updateOfflineBadge();
-    return id;
+    await _dbPutLocal(storeName,data);
+    _offlineQueueAdd('put',storeName,data,data?.id);
+    await _cloudFailedToLocal(e).catch(()=>{});
+    return data?.id;
   }
 }
 async function dbGet(storeName,id){
   await ensureDatabaseReady();
-  if(!_useSupabase) return _dbGetLocal(storeName,id);
+  if(!_useSupabase || !navigator.onLine) return _dbGetLocal(storeName,id);
   try{
     const data=await _dbGetSupabase(storeName,id);
     if(data) await _dbPutLocal(storeName,data);
     return data;
-  }catch(e){ await _cloudFailedToLocal(e); return _dbGetLocal(storeName,id); }
+  }catch(e){
+    await _cloudFailedToLocal(e).catch(()=>{});
+    return _dbGetLocal(storeName,id);
+  }
 }
 async function dbGetAll(storeName){
   await ensureDatabaseReady();
   const k=String(storeName);
   if(!_useSupabase)return _dbGetAllLocal(storeName);
+
+  /* Reuse the complete dataset for this page session. This removes repeated
+     identical REST requests from dashboards, POS, reports, inventory, etc. */
   if(_dbSessionCache.has(k)) return _dbSessionCache.get(k);
+
   const c=_dbAllCache.get(k);
-  if(c&&(Date.now()-c.time)<_DB_ALL_CACHE_TTL){_dbSessionCache.set(k,c.data);return c.data;}
-  const p=_dbAllInFlight.get(k); if(p)return p;
+  if(c&&(Date.now()-c.time)<_DB_ALL_CACHE_TTL){
+    _dbSessionCache.set(k,c.data);
+    return c.data;
+  }
+
+  const p=_dbAllInFlight.get(k);
+  if(p)return p;
+
   const req=(async()=>{
     try{
       const data=await _dbGetAllSupabase(storeName);
-      await _cacheStore(storeName,data);
-      _dbAllCache.set(k,{time:Date.now(),data});_dbSessionCache.set(k,data);
+      _dbAllCache.set(k,{time:Date.now(),data});
+      _dbSessionCache.set(k,data);
+      try{ _localWrite(storeName,data); }catch(_){}
       return data;
     }catch(e){
+      if(REQUIRE_SHARED_SUPABASE) throw e;
       await _cloudFailedToLocal(e);
-      const data=_dbGetAllLocal(storeName);_dbSessionCache.set(k,data);return data;
-    }finally{_dbAllInFlight.delete(k);}
+      const data=_dbGetAllLocal(storeName);
+      _dbSessionCache.set(k,data);
+      return data;
+    }finally{
+      _dbAllInFlight.delete(k);
+    }
   })();
-  _dbAllInFlight.set(k,req); return req;
+  _dbAllInFlight.set(k,req);
+  return req;
 }
 async function dbGetByIndex(storeName,indexName,value){
   await ensureDatabaseReady();
-  if(!_useSupabase) return _dbGetByIndexLocal(storeName,indexName,value);
+  if(!_useSupabase){ if(REQUIRE_SHARED_SUPABASE) throw (_supabaseLastError || new Error('Shared Supabase database is not connected.')); return _dbGetByIndexLocal(storeName,indexName,value); }
   if(_dbSessionCache.has(String(storeName))){
     const rows=_dbSessionCache.get(String(storeName))||[];
-    return rows.filter(row=>row!=null && (row[indexName]===value || (row.data && row.data[indexName]===value)));
+    return rows.filter(row=>{ if(row==null)return false; if(row[indexName]===value)return true; if(row.data && row.data[indexName]===value)return true; return false; });
   }
-  try{
-    const rows=await _dbGetByIndexSupabase(storeName,indexName,value);
-    return rows;
-  }catch(e){ await _cloudFailedToLocal(e); return _dbGetByIndexLocal(storeName,indexName,value); }
+  try{return await _dbGetByIndexSupabase(storeName,indexName,value);}
+  catch(e){ if(REQUIRE_SHARED_SUPABASE) throw e; await _cloudFailedToLocal(e); return _dbGetByIndexLocal(storeName,indexName,value); }
 }
 async function dbDelete(storeName,id){
-  await ensureDatabaseReady();_dbAllInvalidate(storeName);
-  if(!_useSupabase){await _dbDeleteLocal(storeName,id);_offlineEnqueue('delete',storeName,id,null);_updateOfflineBadge();return;}
-  try{await _dbDeleteSupabase(storeName,id);await _dbDeleteLocal(storeName,id);}catch(e){await _cloudFailedToLocal(e);await _dbDeleteLocal(storeName,id);_offlineEnqueue('delete',storeName,id,null);_updateOfflineBadge();}
+  await ensureDatabaseReady(); _dbAllInvalidate(storeName);
+  if(!_useSupabase || !navigator.onLine){ await _dbDeleteLocal(storeName,id); _offlineQueueAdd('delete',storeName,null,id); return; }
+  try{ await _dbDeleteSupabase(storeName,id); await _dbDeleteLocal(storeName,id); }
+  catch(e){ await _dbDeleteLocal(storeName,id); _offlineQueueAdd('delete',storeName,null,id); await _cloudFailedToLocal(e).catch(()=>{}); }
 }
 async function dbClear(storeName){
-  await ensureDatabaseReady();_dbAllInvalidate(storeName);
-  if(!_useSupabase){throw new Error('This reset/clear action requires an internet connection so it cannot accidentally clear only the local copy.');}
-  try{await _dbClearSupabase(storeName);await _dbClearLocal(storeName);}catch(e){throw e;}
+  await ensureDatabaseReady(); _dbAllInvalidate(storeName);
+  if(!_useSupabase || !navigator.onLine){ await _dbClearLocal(storeName); _offlineQueueAdd('clear',storeName,null,null); return; }
+  try{ await _dbClearSupabase(storeName); await _dbClearLocal(storeName); }
+  catch(e){ await _dbClearLocal(storeName); _offlineQueueAdd('clear',storeName,null,null); await _cloudFailedToLocal(e).catch(()=>{}); }
 }
-async function dbCount(storeName){
-  await ensureDatabaseReady();
-  if(!_useSupabase)return _dbCountLocal(storeName);
-  try{return await _dbCountSupabase(storeName);}catch(e){await _cloudFailedToLocal(e);return _dbCountLocal(storeName);}
-}
+async function dbCount(storeName){await ensureDatabaseReady();if(!_useSupabase){if(REQUIRE_SHARED_SUPABASE)throw (_supabaseLastError||new Error('Shared Supabase database is not connected.'));return _dbCountLocal(storeName);}try{return await _dbCountSupabase(storeName);}catch(e){if(REQUIRE_SHARED_SUPABASE)throw e;await _cloudFailedToLocal(e);return _dbCountLocal(storeName);}}
 async function dbPutBatch(storeName,items){await ensureDatabaseReady();for(const item of (items||[]))await dbPut(storeName,item);}
 
 async function resetSupabaseDatabase(){
@@ -4458,62 +4431,52 @@ async function handleLoginCore() {
   const password = document.getElementById('login-password').value;
   if (!loginValue || !password) return toast('Enter your username and password.', 'warning');
 
-  // FIRST: authenticate ERP staff accounts created in Settings → Users.
-  // Those accounts are stored in the shared ERP users table as
-  // username + password_hash. They are NOT required to be Supabase Auth emails.
+  // ERP staff accounts are stored in the shared `users` store. Check them first,
+  // so a cashier username/password is not incorrectly treated as a Supabase email.
   try {
     const users = await dbGetAll('users');
     const normalized = loginValue.toLowerCase();
-    const user = (Array.isArray(users) ? users : []).find(u =>
-      String(u.username || '').trim().toLowerCase() === normalized &&
-      String(u.password_hash ?? u.password ?? '') === String(password) &&
-      u.active !== false
+    const user = (users || []).find(u =>
+      String(u?.username || '').trim().toLowerCase() === normalized &&
+      String(u?.password_hash ?? u?.password ?? '') === String(password) &&
+      u?.active !== false
     );
 
     if (user) {
-      const role = await dbGet('roles', user.role_id);
-      if (!role) throw new Error('User role is missing. Please assign a role in Settings → Users.');
-
-      currentUser = { ...user };
-      currentRole = { ...role };
+      const role = user.role_id ? await dbGet('roles', user.role_id) : null;
+      currentUser = user;
+      currentRole = role || { id:user.role_id || 'staff', name:user.role || 'Staff', permissions:{} };
       window._adiKitchenDemoLogin = false;
       _safeSaveLoginSession(user.id);
       enterERPAfterLogin();
-
       toast(`Welcome, ${user.name || user.username}!`, 'success');
       Promise.resolve().then(async () => {
-        try {
-          await addAuditLog('ERP user logged in', {
-            username: user.username,
-            user_id: user.id,
-            role_id: user.role_id,
-            device: /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent || '') ? 'mobile' : 'desktop'
-          });
-        } catch (e) { console.warn('Login audit log failed:', e); }
+        try { await addAuditLog('User logged in', { username:user.username, device:/Mobile|Android|iPhone|iPad/i.test(navigator.userAgent||'')?'mobile':'desktop' }); }
+        catch(e) { console.warn('Login audit log failed:', e); }
       });
       return;
     }
 
-    // If the account is found but disabled, give a useful message.
-    const inactive = (Array.isArray(users) ? users : []).find(u =>
-      String(u.username || '').trim().toLowerCase() === normalized &&
-      u.active === false
+    const inactive = (users || []).find(u =>
+      String(u?.username || '').trim().toLowerCase() === normalized &&
+      (u?.active === false)
     );
-    if (inactive) return toast('This account is inactive. Contact the administrator.', 'error');
+    if (inactive) {
+      const e = new Error('This account is inactive. Contact the administrator.');
+      toast(e.message, 'error');
+      throw e;
+    }
   } catch (erpError) {
-    console.warn('ERP username login check failed; trying Supabase Auth fallback.', erpError);
+    // If the ERP lookup itself failed, preserve the existing Supabase Auth fallback.
+    console.warn('ERP username login lookup failed; trying Supabase Auth:', erpError);
   }
 
-  // SECOND: preserve Supabase email/password login for accounts that use Supabase Auth.
+  // Keep the existing Supabase Auth path for accounts that really use an email.
   try {
     const authClient = await requireSupabaseAuthClient();
-    const { data, error } = await authClient.auth.signInWithPassword({
-      email: loginValue,
-      password
-    });
+    const { data, error } = await authClient.auth.signInWithPassword({ email:loginValue, password });
     if (error) throw error;
     if (!data?.user) throw new Error('Supabase did not return an authenticated user.');
-
     if (!localStorage.getItem(pinStorageKey(data.user.id))) {
       const pinCreated = await createStaffPin(data.user);
       if (!pinCreated) {
@@ -4521,16 +4484,11 @@ async function handleLoginCore() {
         throw new Error('PIN setup was cancelled. Sign in again to finish setup.');
       }
     }
-
     await resumeSupabaseSession(data.user);
     toast(`Welcome, ${currentUser?.name || data.user.email}!`, 'success');
     Promise.resolve().then(async () => {
-      try {
-        await addAuditLog('User logged in', {
-          email: data.user.email,
-          device: /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent || '') ? 'mobile' : 'desktop'
-        });
-      } catch (e) { console.warn('Login audit log failed:', e); }
+      try { await addAuditLog('User logged in', { email:data.user.email, device:/Mobile|Android|iPhone|iPad/i.test(navigator.userAgent||'')?'mobile':'desktop' }); }
+      catch(e) { console.warn('Login audit log failed:', e); }
     });
   } catch (error) {
     console.error('Login failed:', error);
@@ -4562,7 +4520,7 @@ async function handleLogin() {
   try {
     await Promise.race([
       handleLoginCore(),
-      new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error('Login timed out. If you are offline, open the app once while online first so this device can cache the staff account.')), 10000); })
+      new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error('Login timed out while contacting the shared restaurant database. Please check your phone internet connection.')), 10000); })
     ]);
     if (status) status.textContent = '';
   } catch (err) {
@@ -5433,6 +5391,9 @@ function customerPublicPrintWaitingTicket(ticket,type,orderNumber,name){
   const title=type==='dine_in'?'DINE-IN':type==='delivery'?'DELIVERY':'TAKEAWAY';
   const w=window.open('','_blank','width=360,height=520'); if(!w)return;
   w.document.write(`<html><head><title>Waiting Ticket ${esc(ticket)}</title><style>body{font-family:Arial,sans-serif;text-align:center;padding:18px}.n{font-size:180px;font-weight:1000;line-height:.8;margin:18px 0}.r{font-weight:900;letter-spacing:1px}.s{font-size:11px;color:#666;margin-top:8px}</style></head><body><div class="n">${esc(ticket)}</div><div class="r">${esc(customerPublicRestaurantName)}</div><hr><div class="r">CUSTOMER WAITING TICKET</div><div style="font-size:20px;font-weight:1000;margin:10px">${title}</div><div>Order ${esc(orderNumber)}</div><div style="font-size:11px;margin-top:6px">${esc(name)}</div><div class="s">Thank you. Please wait a few minutes.</div>
+
+
+
 
 </body>`);
   w.document.close(); setTimeout(()=>w.print(),250);
@@ -14430,15 +14391,22 @@ async function renderCustomerMenuSection() {
 
 async function startCustomerOnlineMode(){
   const login=document.getElementById('login-page'),app=document.getElementById('app'),root=document.getElementById('customer-public-root');
-  if(login)login.style.display='none';
-  if(app)app.style.display='none';
+  if(login)login.style.setProperty('display','none','important');
+  if(app)app.style.setProperty('display','none','important');
   if(!root)return;
-  root.style.display='block';
+  root.style.setProperty('display','block','important');
 
-  // IMPORTANT: The public customer menu must never wait for Supabase/network.
-  // Render the owner's exact 70-item catalog immediately, then sync in background.
+  // FIRST: render from data already bundled inside this HTML. No network,
+  // Supabase, SDK, or IndexedDB operation is allowed to block the public page.
   try{
-    const imported=buildImportedCustomerCatalog();
+    let imported=null;
+    try { imported=buildImportedCustomerCatalog(); } catch(e) { console.warn('Bundled catalog builder failed:',e); }
+    if(!imported || !Array.isArray(imported.items)){
+      imported={
+        categories:Array.isArray(window.MENU_CATEGORIES)?window.MENU_CATEGORIES.map(x=>({...x})):[],
+        items:Array.isArray(window.MENU_ITEMS)?window.MENU_ITEMS.filter(i=>i.active!==false).map(x=>({...x})):[]
+      };
+    }
     window._customerPublicCategories=imported.categories||[];
     window._customerPublicItems=imported.items||[];
     customerPublicActiveCat='ALL';
@@ -14449,21 +14417,23 @@ async function startCustomerOnlineMode(){
     if(loader)loader.classList.add('is-hidden');
   }catch(e){
     console.error('Customer static menu render failed:',e);
+    root.innerHTML='<div style="min-height:100vh;display:grid;place-items:center;padding:30px;background:#f7f4ec;color:#24352a;font-family:Arial,sans-serif"><div style="max-width:620px;text-align:center;background:#fff;padding:34px;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.12)"><img src="./adi-kitchen-logo.png" alt="Adi Kitchen" style="width:150px;max-width:45vw;border-radius:20px"><h1 style="margin:16px 0 6px">Adi Kitchen</h1><p style="margin:0;color:#64748b">Customer menu could not start. Please refresh the page.</p><button type="button" onclick="location.reload()" style="margin-top:16px;border:0;border-radius:10px;padding:12px 20px;background:#078930;color:#fff;font-weight:800;cursor:pointer">↻ Refresh Menu</button></div></div>';
+    root.classList.add('customer-startup-fallback');
   }
 
-  // Sync the editable ERP menu in the background as well.
-  // This is critical after logout: pictures saved in Menu Editor live in menuItems,
-  // so the public customer page must overlay the saved database values before the
-  // customer sees the final menu.
+  // SECOND: synchronize saved menu/database changes in the background.
   Promise.resolve().then(async()=>{
     try{
-      const synced=await loadCustomerImportedCatalog();
-      if(isCustomerOrderMode() && root.style.display!=='none'){
-        window._customerPublicCategories=synced.categories||[];
-        window._customerPublicItems=synced.items||[];
+      const synced=await Promise.race([
+        loadCustomerImportedCatalog(),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('background menu sync timeout')),5000))
+      ]);
+      if(synced && isCustomerOrderMode() && root.style.display!=='none'){
+        window._customerPublicCategories=synced.categories||window._customerPublicCategories||[];
+        window._customerPublicItems=synced.items||window._customerPublicItems||[];
         renderCustomerPublicPage(root);
       }
-      await loadCustomerRestaurantName();
+      try{ await loadCustomerRestaurantName(); }catch(_){}
     }catch(e){ console.warn('Background customer menu sync skipped:',e); }
   });
 }
@@ -14786,8 +14756,8 @@ function customerCleanPhone(v){ return String(v||'').replace(/[^0-9+*#]/g,''); }
 function customerTelegramUsername(v){ return String(v||'').trim().replace(/^@+/,'').replace(/[^a-zA-Z0-9_]/g,''); }
 function customerTelegramOrderText(){
   const items=Array.isArray(customerPublicCart)?customerPublicCart:[];
-  if(!items.length) return 'Hello, I would like to order from hawassarestoranrt.';
-  return `Hello, I would like to order from hawassarestoranrt. My order: ${items.map(x=>`${Number(x.quantity||0)} x ${x.name||'Item'}`).join(', ')}.`;
+  if(!items.length) return 'Hello, I would like to order from Adi Kitchen.';
+  return `Hello, I would like to order from Adi Kitchen. My order: ${items.map(x=>`${Number(x.quantity||0)} x ${x.name||'Item'}`).join(', ')}.`;
 }
 function customerCleanPhone(v){ return String(v||'').replace(/[^0-9+*#]/g,''); }
 function customerCleanSocialUsername(v){ return String(v||'').trim().replace(/^@+/,'').replace(/\s+/g,''); }
@@ -16061,7 +16031,7 @@ document.addEventListener('DOMContentLoaded', function(){
         try{await startCustomerOnlineMode();}catch(e){console.warn('Customer startup retry failed',e);}
       }
       if(root.querySelector('.customer-public-page')===null && root.querySelector('.customer-startup-fallback')===null){
-        root.innerHTML='<div class="customer-startup-fallback" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px;background:#f7f4ec;color:#24352a;font-family:Arial,sans-serif"><div style="max-width:620px;text-align:center;background:#fff;padding:34px;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.12)"><div style="font-size:42px">🍽️</div><h1 style="margin:10px 0 6px">hawassarestoranrt</h1><p style="margin:0 0 16px;color:#64748b">Customer menu could not start.</p><button type="button" onclick="location.reload()" style="border:0;border-radius:10px;padding:12px 20px;background:#078930;color:#fff;font-weight:800;cursor:pointer">↻ Refresh Menu</button></div></div>';
+        root.innerHTML='<div class="customer-startup-fallback" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px;background:#f7f4ec;color:#24352a;font-family:Arial,sans-serif"><div style="max-width:620px;text-align:center;background:#fff;padding:34px;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.12)"><div style="font-size:42px">🍽️</div><h1 style="margin:10px 0 6px">Adi Kitchen</h1><p style="margin:0 0 16px;color:#64748b">Customer menu could not start.</p><button type="button" onclick="location.reload()" style="border:0;border-radius:10px;padding:12px 20px;background:#078930;color:#fff;font-weight:800;cursor:pointer">↻ Refresh Menu</button></div></div>';
       }
     }catch(e){console.error('Customer startup rescue failed',e);}
   },350);
@@ -16094,13 +16064,12 @@ document.addEventListener('DOMContentLoaded', function(){
 })();
 </script>
 
-<script id="hawassa-pwa-runtime">
+<script id="adi-kitchen-pwa-runtime">
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
-      .catch(function (err) {
-        console.warn('PWA service worker registration failed:', err);
-      });
+      .then(function(){ console.log('Adi Kitchen offline app ready.'); })
+      .catch(function (err) { console.warn('Adi Kitchen PWA service worker registration failed:', err); });
   });
 }
 </script>
@@ -16190,36 +16159,29 @@ body.adi-erp-visible .customer-compliment-fab { display:none!important; visibili
 })();
 </script>
 
-<script id="adi-pwa-runtime">
+
+<style id="adi-offline-sync-ui">
+#adi-offline-sync-badge{position:fixed;right:14px;bottom:14px;z-index:99999;border-radius:999px;padding:8px 12px;background:#14532d;color:#fff;font:800 12px/1.1 Arial,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.18);display:none}
+#adi-offline-sync-badge.offline{display:block;background:#7c2d12}
+#adi-offline-sync-badge.pending{display:block;background:#92400e}
+</style>
+<div id="adi-offline-sync-badge" aria-live="polite"></div>
+<script id="adi-offline-sync-ui-script">
 (function(){
-  const LOGO='./adi-kitchen-logo.png';
-  function applyLogo(root=document){
-    try{
-      root.querySelectorAll('.brand-mark,.logo-icon,.customer-public-mark').forEach(el=>{
-        if(el.querySelector('img')) return;
-        const img=document.createElement('img'); img.src=LOGO; img.alt='Adi Kitchen'; img.loading='eager';
-        el.textContent=''; el.appendChild(img);
-      });
-      root.querySelectorAll('.customer-loader-logo').forEach(el=>{
-        if(el.querySelector('img')) return;
-        const img=document.createElement('img'); img.src=LOGO; img.alt='Adi Kitchen'; img.style.cssText='width:100px;height:100px;border-radius:20px;object-fit:cover;';
-        el.textContent=''; el.appendChild(img);
-      });
-    }catch(e){}
+  function update(){
+    const el=document.getElementById('adi-offline-sync-badge'); if(!el)return;
+    const q=typeof _offlineQueueRead==='function'?_offlineQueueRead():[];
+    if(!navigator.onLine){el.textContent='Offline • saved on this device';el.className='offline';}
+    else if(q.length){el.textContent='Syncing '+q.length+' change'+(q.length===1?'':'s')+'…';el.className='pending';}
+    else{el.textContent='Online • synced';el.className='';setTimeout(()=>{if(el)el.style.display='none';},1800);}
   }
-  window.addEventListener('DOMContentLoaded',()=>{
-    applyLogo();
-    if('serviceWorker' in navigator && location.protocol!=='file:'){
-      navigator.serviceWorker.register('./sw.js',{scope:'./'}).then(()=>console.log('Adi Kitchen offline app ready.')).catch(e=>console.warn('PWA service worker registration failed:',e));
-    }
-    setTimeout(()=>{applyLogo(); if(typeof _updateOfflineBadge==='function')_updateOfflineBadge();},700);
-  });
-  const obs=new MutationObserver(()=>applyLogo());
-  if(document.documentElement)obs.observe(document.documentElement,{childList:true,subtree:true});
-  window.addEventListener('beforeinstallprompt',e=>{window._adiInstallPrompt=e;});
-  window.addEventListener('appinstalled',()=>{window._adiInstallPrompt=null;try{if(typeof toast==='function')toast('Adi Kitchen was installed on this device. It can now open from the app icon.','success');}catch(e){}});
+  window.addEventListener('offline',update);
+  window.addEventListener('online',()=>{update();setTimeout(update,1500);});
+  document.addEventListener('DOMContentLoaded',update);
+  setInterval(update,4000);
 })();
 </script>
+
 </body>
 
 <!-- TARGETED ORDER BUTTON RELIABILITY FIX: only order submission/approval flow -->
