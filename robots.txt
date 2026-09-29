@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://hawassa-restaurant-erp.vercel.app/sitemap.xml
