@@ -5112,10 +5112,10 @@ async function renderDashboard() {
    Customers order without ERP login. Orders enter WAITER inbox
    with status pending_waiter, then waiter forwards to POS.
    ============================================================ */
-let customerPublicCart = [];
-let customerPublicActiveCat = 'ALL';
-let customerPublicMenuGroup = 'FOOD';
-let customerPublicRestaurantName = 'Adi Kitchen';
+var customerPublicCart = [];
+var customerPublicActiveCat = 'ALL';
+var customerPublicMenuGroup = 'FOOD';
+var customerPublicRestaurantName = 'Adi Kitchen';
 
 function isCustomerOrderMode(){
   const p = new URLSearchParams(location.search);
@@ -5159,7 +5159,7 @@ function renderCustomerMenuSection(){
       customerPublicActiveCat='ALL';
       window.renderCustomerPublicPage(content);
     } else {
-      content.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><h3>Customer menu could not be loaded</h3><p>Customer menu initialization is still starting. Please wait a moment and try again.</p></div>';
+      content.innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><h3></h3><p>Customer menu initialization is still starting. Please wait a moment and try again.</p></div>';
     }
   },0);
 }
@@ -14390,7 +14390,7 @@ async function renderCustomerMenuSection() {
     renderCustomerPublicPage(content);
   } catch (e) {
     console.error('Customer menu section failed:', e);
-    content.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h3>Customer menu could not be loaded</h3><p>Please refresh the page and try again.</p></div>';
+    content.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h3></h3><p>Please refresh the page and try again.</p></div>';
   }
 }
 
@@ -14422,7 +14422,7 @@ async function startCustomerOnlineMode(){
     if(loader)loader.classList.add('is-hidden');
   }catch(e){
     console.error('Customer static menu render failed:',e);
-    root.innerHTML='<div style="min-height:100vh;display:grid;place-items:center;padding:30px;background:#f7f4ec;color:#24352a;font-family:Arial,sans-serif"><div style="max-width:620px;text-align:center;background:#fff;padding:34px;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.12)"><img src="./adi-kitchen-logo.png" alt="Adi Kitchen" style="width:150px;max-width:45vw;border-radius:20px"><h1 style="margin:16px 0 6px">Adi Kitchen</h1><p style="margin:0;color:#64748b">Customer menu could not start. Please refresh the page.</p><button type="button" onclick="location.reload()" style="margin-top:16px;border:0;border-radius:10px;padding:12px 20px;background:#078930;color:#fff;font-weight:800;cursor:pointer">↻ Refresh Menu</button></div></div>';
+    root.innerHTML='<div style="min-height:100vh;display:grid;place-items:center;padding:30px;background:#f7f4ec;color:#24352a;font-family:Arial,sans-serif"><div style="max-width:620px;text-align:center;background:#fff;padding:34px;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.12)"><img src="./adi-kitchen-logo.png" alt="Adi Kitchen" style="width:150px;max-width:45vw;border-radius:20px"><h1 style="margin:16px 0 6px">Adi Kitchen</h1><p style="margin:0;color:#64748b"></p><button type="button" onclick="location.reload()" style="margin-top:16px;border:0;border-radius:10px;padding:12px 20px;background:#078930;color:#fff;font-weight:800;cursor:pointer">↻ Refresh Menu</button></div></div>';
     root.classList.add('customer-startup-fallback');
   }
 
@@ -16035,42 +16035,8 @@ document.addEventListener('DOMContentLoaded', function(){
       if(typeof startCustomerOnlineMode==='function' && root.querySelector('.customer-public-page')===null){
         try{await startCustomerOnlineMode();}catch(e){console.warn('Customer startup retry failed',e);}
       }
-      if(root.querySelector('.customer-public-page')===null){
-        // Last-resort public menu: render bundled menu data directly if a legacy
-        // renderer throws. This keeps the customer page usable without Supabase.
-        try {
-          const source=(typeof MENU_ITEMS!=='undefined' && Array.isArray(MENU_ITEMS))?MENU_ITEMS:[];
-          const items=source.filter(item=>item && item.active!==false);
-          root.innerHTML='';
-          const page=document.createElement('main');
-          page.className='customer-public-page customer-emergency-page';
-          page.style.cssText='min-height:100vh;padding:24px;background:#f7f4ec;color:#24352a;font-family:Arial,sans-serif';
-          const header=document.createElement('header');
-          header.style.cssText='max-width:1200px;margin:0 auto 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap';
-          const title=document.createElement('h1'); title.textContent='🍽️ Adi Kitchen — Menu'; title.style.margin='0';
-          const cart=document.createElement('button'); cart.type='button'; cart.textContent='🛒 View Order';
-          cart.style.cssText='border:0;border-radius:10px;padding:12px 18px;background:#078930;color:#fff;font-weight:800;cursor:pointer';
-          cart.addEventListener('click',()=>{if(typeof customerPublicOpenCart==='function')customerPublicOpenCart();});
-          header.append(title,cart); page.appendChild(header);
-          const note=document.createElement('p'); note.textContent='Menu is available. Some live menu updates may not be loaded.'; note.style.cssText='max-width:1200px;margin:0 auto 18px;color:#64748b'; page.appendChild(note);
-          const grid=document.createElement('section'); grid.style.cssText='max-width:1200px;margin:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px';
-          items.forEach(item=>{
-            const card=document.createElement('article'); card.style.cssText='background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px #0001;display:flex;flex-direction:column';
-            if(item.image_url){const img=document.createElement('img');img.src=item.image_url;img.alt=String(item.name||'Food');img.loading='lazy';img.style.cssText='width:100%;height:160px;object-fit:cover';card.appendChild(img);}
-            const body=document.createElement('div');body.style.cssText='padding:14px;display:flex;flex-direction:column;gap:7px;flex:1';
-            const name=document.createElement('strong');name.textContent=String(item.name||'Menu item');
-            const am=document.createElement('span');am.textContent=String(item.name_am||'');am.style.color='#64748b';
-            const price=document.createElement('b');price.textContent=(typeof fmtPrice==='function')?fmtPrice(item.price):String(item.price??'');
-            const add=document.createElement('button');add.type='button';add.textContent='+ Add to Order';add.style.cssText='margin-top:auto;border:0;border-radius:9px;padding:10px;background:#f3cc69;color:#171208;font-weight:800;cursor:pointer';
-            add.addEventListener('click',()=>{if(typeof customerPublicAdd==='function')customerPublicAdd(item.id);else alert('Ordering is temporarily unavailable. Please contact the restaurant.');});
-            body.append(name,am,price,add);card.appendChild(body);grid.appendChild(card);
-          });
-          if(!items.length){const empty=document.createElement('p');empty.textContent='The menu is temporarily unavailable. Please contact the restaurant.';grid.appendChild(empty);}
-          page.appendChild(grid);root.appendChild(page);root.classList.add('customer-public-root-ready');
-        } catch(renderError) {
-          console.error('Emergency customer menu render failed:',renderError);
-          root.innerHTML='<main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#f7f4ec;font-family:Arial,sans-serif"><div style="background:#fff;padding:28px;border-radius:16px;text-align:center"><h1>Adi Kitchen</h1><p>Menu temporarily unavailable. Please contact the restaurant.</p></div></main>';
-        }
+      if(root.querySelector('.customer-public-page')===null && root.querySelector('.customer-startup-fallback')===null){
+        root.innerHTML='<div class="customer-startup-fallback" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:30px;background:#f7f4ec;color:#24352a;font-family:Arial,sans-serif"><div style="max-width:620px;text-align:center;background:#fff;padding:34px;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.12)"><div style="font-size:42px">🍽️</div><h1 style="margin:10px 0 6px">Adi Kitchen</h1><p style="margin:0 0 16px;color:#64748b"></p><button type="button" onclick="location.reload()" style="border:0;border-radius:10px;padding:12px 20px;background:#078930;color:#fff;font-weight:800;cursor:pointer">↻ Refresh Menu</button></div></div>';
       }
     }catch(e){console.error('Customer startup rescue failed',e);}
   },350);
@@ -16695,5 +16661,198 @@ async function saveBulkCustomerMenuEditor(){
     window.__erpPhoneLauncherObserver=new MutationObserver(removeERPPhoneLauncher);
     window.__erpPhoneLauncherObserver.observe(document.documentElement,{childList:true,subtree:true});
   }
+})();
+</script>
+
+<!-- ============================================================
+     FINAL CUSTOMER PUBLIC ROUTE REPAIR
+     Fixes the TDZ startup failure caused by the early DOMContentLoaded
+     handler calling a later lexical customerPublicActiveCat binding.
+     This public renderer is intentionally self-contained and never waits
+     for Supabase/IndexedDB before showing the bundled customer menu.
+     ============================================================ -->
+<script id="adi-final-customer-public-repair">
+(function(){
+  'use strict';
+  if(window.__ADI_FINAL_CUSTOMER_PUBLIC_REPAIR__) return;
+  window.__ADI_FINAL_CUSTOMER_PUBLIC_REPAIR__=true;
+
+  function isERP(){
+    try{
+      const p=new URLSearchParams(location.search);
+      return p.get('erp')==='1' || p.get('staff')==='1' || location.hash==='#erp' || location.hash==='#staff';
+    }catch(e){return false;}
+  }
+  function isCustomerLogin(){
+    try{return new URLSearchParams(location.search).get('customer-login')==='1';}catch(e){return false;}
+  }
+  function rootEl(){return document.getElementById('customer-public-root');}
+  function esc2(v){
+    return String(v==null?'':v).replace(/[&<>\"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch];});
+  }
+  function sourceItems(){
+    try{
+      if(typeof buildImportedCustomerCatalog==='function'){
+        const c=buildImportedCustomerCatalog();
+        if(c && Array.isArray(c.items)) return c.items;
+      }
+    }catch(e){console.warn('Final public catalog builder failed:',e);}
+    try{
+      if(typeof CUSTOMER_SOURCE_MENU!=='undefined' && Array.isArray(CUSTOMER_SOURCE_MENU)){
+        const map=new Map();
+        return CUSTOMER_SOURCE_MENU.map(function(m,idx){
+          if(!map.has(m.cat)) map.set(m.cat,'repair-cat-'+map.size);
+          return {id:'repair-menu-'+idx,name:m.name,name_am:m.am||'',price:Number(m.price)||0,category_id:map.get(m.cat),active:true,image_url:m.img||m.fallback||'',fallback_image_url:m.fallback||m.img||''};
+        });
+      }
+    }catch(e){console.warn('Final public source menu unavailable:',e);}
+    return [];
+  }
+  function sourceCategories(items){
+    const seen=new Map();
+    (items||[]).forEach(function(i){
+      const id=String(i.category_id||'');
+      if(id && !seen.has(id)) seen.set(id,{id:id,name:'Food',icon:'🍽️'});
+    });
+    return Array.from(seen.values());
+  }
+  function isDrink(i){
+    const t=(String(i&&i.name||'')+' '+String(i&&i.name_am||'')).toLowerCase();
+    return /(juice|coffee|tea|beer|malt|soft drink|traditional drink|tej|tella|water|cola|fanta|sprite|pepsi|mirinda|drink|beverage|ጭማቂ|ቡና|ሻይ|ቢራ|ማልት|ለስላሳ|ጠጣ)/i.test(t);
+  }
+  function foodType(i){
+    const t=(String(i&&i.name||'')+' '+String(i&&i.name_am||'')).toLowerCase();
+    if(/pasta|macaroni|mekoroni|mokorani|ruz/.test(t)) return 'PASTA';
+    if(/enkulal|egg|siga|meat|tibs|kitfo|doro|chicken|fish|asa|ayib|cheese|besiga|kuanta|minchet|gomen besiga|bozena|teferesho/.test(t)) return 'NONFASTING';
+    if(/ful|atkilit|vegetable|avocado|abokado|selata|salad|telba|gomen|tegabino|timatim|shiro|misir|lentil|enjera firfir|firfir beabokado|beyayinet|yetsom/.test(t)) return 'FASTING';
+    return 'NONFASTING';
+  }
+  function state(){
+    if(!window.__ADI_CUSTOMER_PUBLIC_STATE__) window.__ADI_CUSTOMER_PUBLIC_STATE__={group:'FOOD',cat:'ALL',q:''};
+    return window.__ADI_CUSTOMER_PUBLIC_STATE__;
+  }
+  function visibleItems(){
+    const st=state();
+    const all=(window.__ADI_CUSTOMER_ITEMS__||[]).filter(i=>i&&i.active!==false);
+    const q=String(st.q||'').toLowerCase().trim();
+    return all.filter(function(i){
+      const drink=isDrink(i);
+      if(st.group==='DRINKS' && !drink) return false;
+      if(st.group==='FOOD' && drink) return false;
+      if(st.cat==='FASTING' && foodType(i)!=='FASTING') return false;
+      if(st.cat==='NONFASTING' && foodType(i)!=='NONFASTING') return false;
+      if(st.cat==='PASTA' && foodType(i)!=='PASTA') return false;
+      if(st.cat && st.cat!=='ALL' && st.cat!=='FOOD' && st.cat!=='DRINKS' && st.cat!=='FASTING' && st.cat!=='NONFASTING' && st.cat!=='PASTA' && String(i.category_id)!==String(st.cat)) return false;
+      if(q && !(String(i.name||'').toLowerCase().includes(q) || String(i.name_am||'').includes(q))) return false;
+      return true;
+    });
+  }
+  function fallbackImage(i){
+    try{
+      if(typeof customerInitialImage==='function') return customerInitialImage(i);
+      const n=String(i&&i.name||'').toLowerCase();
+      if(/pasta|macaroni|mekoroni|mokorani|ruz/.test(n)) return 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=1200&q=85';
+      if(/enkulal|egg/.test(n)) return 'https://images.unsplash.com/photo-1518310383802-640c2de311b2?auto=format&fit=crop&w=1200&q=85';
+      if(/tibs|siga|meat|besiga|kuanta|minchet|teferesho/.test(n)) return 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=85';
+      if(/shiro|misir|gomen|atkilit|selata|timatim|tegabino|avocado/.test(n)) return 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1200&q=85';
+      return 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1200&q=85';
+    }catch(e){return ''}
+  }
+  function money(n){
+    try{ if(typeof fmtPrice==='function') return fmtPrice(n); }catch(e){}
+    return (Number(n)||0).toFixed(2)+' ETB';
+  }
+  function removeInstallButtons(){
+    const nodes=document.querySelectorAll('button,a,[role="button"]');
+    nodes.forEach(function(el){
+      const label=((el.id||'')+' '+(el.className||'')+' '+(el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.textContent||'')).replace(/\s+/g,' ').trim().toLowerCase();
+      if(/install\s+adi\s+kitchen/.test(label)) el.remove();
+    });
+  }
+  function syncExistingGlobals(items){
+    try{ window._customerPublicItems=items.slice(); }catch(e){}
+    try{ window._customerPublicCategories=sourceCategories(items); }catch(e){}
+  }
+  function render(){
+    if(isERP() || isCustomerLogin()) return;
+    const root=rootEl(); if(!root) return;
+    const st=state();
+    const items=visibleItems();
+    let restaurant='Adi Kitchen';
+    try{ if(typeof customerPublicRestaurantName!=='undefined' && String(customerPublicRestaurantName).trim()) restaurant=String(customerPublicRestaurantName).trim(); }catch(e){}
+    const totalCart=(()=>{try{return (JSON.parse(sessionStorage.getItem('hawassa_customer_cart')||'[]')||[]).reduce((s,x)=>s+Number(x.quantity||0),0);}catch(e){return 0;}})();
+    root.innerHTML='<div class="customer-public-page adi-final-customer-page">'
+      +'<header class="customer-public-nav"><div class="customer-public-nav-inner">'
+      +'<div class="customer-public-brand"><div class="customer-public-mark">🍽️</div><div><strong>'+esc2(restaurant)+'</strong><br><span style="font-size:.68rem;color:#aeb8b0">ETHIOPIAN RESTAURANT</span></div></div>'
+      +'<nav class="customer-public-main-nav" aria-label="Customer navigation"><button type="button" data-adi-nav="home">Home</button><button type="button" data-adi-nav="menu">Menu</button><button type="button" data-adi-nav="about">About</button></nav>'
+      +'<div class="customer-public-top-actions"><button type="button" class="customer-top-signup" onclick="openBeautifulCustomerLogin && openBeautifulCustomerLogin()">🔐 Sign Up</button><button type="button" class="customer-top-compliment" onclick="window.customerOpenCompliment && customerOpenCompliment()">💛 Compliment</button><button class="customer-public-cart" type="button" onclick="window.customerPublicOpenCart && customerPublicOpenCart()">🛒 Order <span id="customer-public-count" class="customer-public-badge">'+totalCart+'</span></button></div>'
+      +'</div></header>'
+      +'<section class="customer-public-hero" id="customer-public-home"><div class="customer-public-hero-inner"><div class="customer-public-eyebrow">AUTHENTIC ETHIOPIAN DINING · ADI KITCHEN</div><h1>Taste <span>Ethiopia.</span><br>Order with ease.</h1><p>Choose your Ethiopian food, drinks and favorites online. Your order goes to our waiter team first, then to POS for review and kitchen preparation.</p><div class="customer-public-hero-actions"><button class="customer-public-hero-btn" type="button" data-adi-nav="menu">🍴 View Menu</button><button class="customer-public-hero-secondary" type="button" data-adi-nav="about">About Us</button></div></div></section>'
+      +'<section class="customer-public-section" id="customer-online-menu"><div class="customer-public-section-head"><div><div class="customer-public-eyebrow">ONLINE MENU</div><h2>Online Menu</h2></div><div class="customer-public-item-count"><b>'+items.length+'</b> items</div></div>'
+      +'<input id="adi-final-customer-search" class="customer-public-search" value="'+esc2(st.q)+'" placeholder="Search English or Amharic menu name…">'
+      +'<div class="customer-public-choice-boxes"><button type="button" class="customer-public-choice '+(st.group==='FOOD'?'active':'')+'" data-adi-group="FOOD"><span>🍽️</span><strong>Food</strong><small>Food menu</small></button><button type="button" class="customer-public-choice '+(st.group==='DRINKS'?'active':'')+'" data-adi-group="DRINKS"><span>🥤</span><strong>Drinks</strong><small>Drinks menu</small></button></div>'
+      +'<div class="customer-public-subcategory-box"><button type="button" class="customer-public-subchip '+(st.cat==='FOOD'||(st.group==='FOOD'&&st.cat==='ALL')?'active':'')+'" data-adi-cat="ALL">🍽️ All Food</button><button type="button" class="customer-public-subchip '+(st.cat==='FASTING'?'active':'')+'" data-adi-cat="FASTING">🌿 Fasting</button><button type="button" class="customer-public-subchip '+(st.cat==='NONFASTING'?'active':'')+'" data-adi-cat="NONFASTING">🍖 Non-Fasting</button><button type="button" class="customer-public-subchip '+(st.cat==='PASTA'?'active':'')+'" data-adi-cat="PASTA">🍝 Pasta Related</button><button type="button" class="customer-public-subchip '+(st.group==='DRINKS'?'active':'')+'" data-adi-cat="DRINKS">🥤 All Drinks</button></div>'
+      +'<div class="customer-public-grid">'+(items.map(function(i){const im=String(i.image_url||i.fallback_image_url||fallbackImage(i)||'').trim();return '<article class="customer-public-card"><div class="customer-public-image-wrap"><img class="customer-public-image" src="'+esc2(im)+'" alt="'+esc2(i.name)+'" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=\''+esc2(fallbackImage(i))+'\';this.style.display=\'block\';"></div><div class="customer-public-card-body"><div class="customer-public-name">'+esc2(i.name)+'</div><div class="customer-public-am">'+esc2(i.name_am||'')+'</div><div class="customer-public-row"><span class="customer-public-price">'+money(i.price)+'</span><button class="customer-public-add" type="button" data-adi-add="'+esc2(String(i.id))+'">+</button></div></div></article>';}).join('')||'<div class="customer-public-empty">No matching menu item.</div>')+'</div></section>'
+      +'<section class="customer-public-about" id="customer-public-about"><div class="customer-public-about-inner"><div><div class="customer-public-eyebrow">ABOUT ADI KITCHEN</div><h2>Good food. Happy moments.</h2><p>Authentic Ethiopian cuisine in the heart of Hawassa.</p></div></div></section>'
+      +'<div id="customer-public-modal" class="customer-public-modal" onclick="if(event.target===this && window.customerPublicCloseCart)customerPublicCloseCart()"><div class="customer-public-sheet"><div class="customer-public-sheet-head"><h2 style="margin:0">🛒 Your Order</h2><button class="customer-public-close" type="button" onclick="window.customerPublicCloseCart && customerPublicCloseCart()">✕</button></div><div id="customer-public-cart" style="margin-top:10px"></div><div class="customer-public-total"><span>Total</span><span id="customer-public-total">0.00 ETB</span></div><div class="customer-public-form"><input id="customer-public-name" placeholder="Your name"><input id="customer-public-phone" inputmode="tel" placeholder="Phone number"><select id="customer-public-type"><option value="takeaway">📦 Takeaway</option><option value="dine_in">🍽️ Dine-in</option><option value="delivery">🛵 Delivery</option></select><input id="customer-public-address" placeholder="Delivery address (required for delivery)"><textarea id="customer-public-note" rows="3" placeholder="Special request (optional)"></textarea><button id="customer-public-place-order" class="btn btn-primary" type="button" onclick="window.submitCustomerOnlineOrder && submitCustomerOnlineOrder();return false;">📤 Place Online Order</button><div id="customer-public-success"></div></div></div></div>'
+      +'</div>';
+    try{ if(typeof customerPublicLoadCart==='function') customerPublicLoadCart(); }catch(e){}
+    try{ if(typeof customerPublicDrawCart==='function') customerPublicDrawCart(); }catch(e){}
+    removeInstallButtons();
+    root.classList.add('customer-public-root-ready');
+    root.style.setProperty('display','block','important');
+  }
+  function setGroup(group){const st=state();st.group=group==='DRINKS'?'DRINKS':'FOOD';st.cat='ALL';render();}
+  function setCat(cat){const st=state();st.cat=String(cat||'ALL');if(st.cat==='DRINKS'){st.group='DRINKS';st.cat='ALL';}else if(['FASTING','NONFASTING','PASTA'].includes(st.cat)){st.group='FOOD';}else if(st.cat==='ALL'){/* preserve group */}render();}
+  function add(id){
+    try{ if(typeof customerPublicAdd==='function'){ customerPublicAdd(id); return; } }catch(e){console.warn('Existing customer cart add failed:',e);}
+    const item=(window.__ADI_CUSTOMER_ITEMS__||[]).find(x=>String(x.id)===String(id));if(!item)return;
+    let cart=[];try{cart=JSON.parse(sessionStorage.getItem('hawassa_customer_cart')||'[]')||[];}catch(e){}
+    const found=cart.find(x=>String(x.menu_item_id)===String(id));
+    if(found)found.quantity=Number(found.quantity||0)+1;else cart.push({menu_item_id:item.id,name:item.name,name_am:item.name_am||'',price:Number(item.price)||0,quantity:1});
+    try{sessionStorage.setItem('hawassa_customer_cart',JSON.stringify(cart));}catch(e){}
+    render();
+  }
+  function wire(){
+    const root=rootEl(); if(!root)return;
+    root.querySelectorAll('[data-adi-group]').forEach(function(b){b.onclick=function(){setGroup(b.getAttribute('data-adi-group'));};});
+    root.querySelectorAll('[data-adi-cat]').forEach(function(b){b.onclick=function(){const c=b.getAttribute('data-adi-cat');if(c==='DRINKS'){setGroup('DRINKS');}else{setCat(c);}};});
+    root.querySelectorAll('[data-adi-add]').forEach(function(b){b.onclick=function(){add(b.getAttribute('data-adi-add'));};});
+    root.querySelectorAll('[data-adi-nav]').forEach(function(b){b.onclick=function(){const v=b.getAttribute('data-adi-nav');const id=v==='about'?'customer-public-about':(v==='menu'?'customer-online-menu':'customer-public-home');document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});};});
+    const search=root.querySelector('#adi-final-customer-search');if(search)search.oninput=function(){state().q=search.value||'';render();};
+  }
+  function start(){
+    if(isERP() || isCustomerLogin()) return;
+    const root=rootEl(); if(!root)return;
+    const items=sourceItems();
+    window.__ADI_CUSTOMER_ITEMS__=items.slice();
+    syncExistingGlobals(items);
+    try{root.innerHTML='';}catch(e){}
+    render();
+    wire();
+    // Keep saved Menu Editor changes synced in the background; never block first paint.
+    Promise.resolve().then(async function(){
+      try{
+        if(typeof loadCustomerImportedCatalog==='function'){
+          const synced=await Promise.race([loadCustomerImportedCatalog(),new Promise((_,rej)=>setTimeout(()=>rej(new Error('customer sync timeout')),5000))]);
+          if(synced && Array.isArray(synced.items) && synced.items.length){
+            window.__ADI_CUSTOMER_ITEMS__=synced.items.slice(); syncExistingGlobals(synced.items); render(); wire();
+          }
+        }
+      }catch(e){console.warn('Final public background sync skipped:',e);}
+    });
+    removeInstallButtons();
+  }
+
+  // Replace the broken public-mode functions BEFORE any DOMContentLoaded handler runs.
+  window.startCustomerOnlineMode=function(){start();};
+  window.renderCustomerPublicPage=function(){start();};
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',start,{once:false});
+  }else start();
+  window.addEventListener('load',function(){ if(!isERP()&&!isCustomerLogin()) start(); removeInstallButtons(); });
+  const mo=new MutationObserver(function(){ if(!isERP()&&!isCustomerLogin()) removeInstallButtons(); });
+  mo.observe(document.documentElement,{childList:true,subtree:true});
 })();
 </script>
