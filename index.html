@@ -2630,7 +2630,9 @@ for delete to anon using (true);
 }
 </style>
 
-  <link rel="manifest" href="./manifest.json">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
   <meta name="theme-color" content="#14532d">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2900,6 +2902,31 @@ body.erp-staff-mode .customer-compliment-fab { display:none!important; }
 .pos-food-filter{border:1px solid rgba(0,0,0,.12);background:#f7f8f6;color:#253128;padding:9px 13px;border-radius:999px;font-weight:800;cursor:pointer;transition:.15s}
 .pos-food-filter:hover,.pos-food-filter.active{background:#e7b84b;color:#171208;border-color:#e7b84b}
 </style>
+
+<style id="adi-pwa-install-style">
+#adi-pwa-install{position:fixed;left:16px;bottom:18px;z-index:2147483000;border:0;border-radius:999px;padding:12px 17px;background:#14532d;color:#fff;font:700 14px system-ui,sans-serif;box-shadow:0 5px 20px #0004;cursor:pointer}
+#adi-pwa-install[hidden]{display:none!important}
+#adi-pwa-install:focus-visible{outline:3px solid #facc15;outline-offset:3px}
+</style>
+<script id="adi-pwa-install-helper">
+(function(){
+  let installPrompt=null;
+  function setup(){
+    if(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return;
+    const button=document.createElement('button');
+    button.id='adi-pwa-install'; button.type='button'; button.textContent='⬇ Install Adi Kitchen';
+    button.setAttribute('aria-label','Install Adi Kitchen app'); document.body.appendChild(button);
+    window.addEventListener('beforeinstallprompt',function(event){event.preventDefault();installPrompt=event;button.hidden=false;});
+    window.addEventListener('appinstalled',function(){button.remove();installPrompt=null;});
+    button.addEventListener('click',async function(){
+      if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;return;}
+      alert('To install Adi Kitchen, open this page in Microsoft Edge or Chrome. In Edge, open Settings and more (⋯) → Apps → Install this site as an app. In Chrome, use the Install icon in the address bar or browser menu if available. If no install option appears, confirm the latest files are published and reload.');
+    });
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup();
+})();
+</script>
+
 </head>
 <body>
 
@@ -3287,24 +3314,18 @@ async function dbPut(storeName,data){
   if(String(storeName)==='settings'){window.__posSettingsCache=null;window.__posSettingsCacheAt=0;}
   if(!_useSupabase || !navigator.onLine){
     const id=await _dbPutLocal(storeName,data);
-    // Preserve the exact locally assigned ID in the sync payload. Without this,
-    // records created offline without an explicit ID could be duplicated on sync.
-    const queuedData=Object.assign({},data||{},{id});
-    _offlineQueueAdd('put',storeName,queuedData,id);
+    _offlineQueueAdd('put',storeName,data,id);
     return id;
   }
   try{
     const id=await _dbPutSupabase(storeName,data);
-    const saved=Object.assign({},data||{},{id});
-    await _dbPutLocal(storeName,saved);
+    await _dbPutLocal(storeName,data);
     return id;
   }catch(e){
-    const id=data?.id || (typeof uid==='function'?uid():crypto.randomUUID());
-    const saved=Object.assign({},data||{},{id});
-    await _dbPutLocal(storeName,saved);
-    _offlineQueueAdd('put',storeName,saved,id);
+    await _dbPutLocal(storeName,data);
+    _offlineQueueAdd('put',storeName,data,data?.id);
     await _cloudFailedToLocal(e).catch(()=>{});
-    return id;
+    return data?.id;
   }
 }
 async function dbGet(storeName,id){

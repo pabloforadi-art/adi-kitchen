@@ -1,4 +1,4 @@
-const CACHE='adi-kitchen-pwa-v3';
+const CACHE='adi-kitchen-pwa-v4';
 const APP_SHELL=[
   './',
   './index.html',
