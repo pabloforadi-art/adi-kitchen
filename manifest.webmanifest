@@ -1,17 +1,17 @@
 {
-  "name":"Adi Kitchen",
-  "short_name":"Adi Kitchen",
-  "id":"/adi-kitchen/",
-  "start_url":"/adi-kitchen/",
-  "scope":"/adi-kitchen/",
-  "display":"standalone",
-  "background_color":"#14532d",
-  "theme_color":"#14532d",
-  "description":"Adi Kitchen restaurant ordering and ERP app.",
-  "icons":[
-    {"src":"/adi-kitchen/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
-    {"src":"/adi-kitchen/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
-    {"src":"/adi-kitchen/icon-192.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
-    {"src":"/adi-kitchen/icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  "name": "Adi Kitchen",
+  "short_name": "Adi Kitchen",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14532d",
+  "theme_color": "#14532d",
+  "description": "Adi Kitchen restaurant ordering and ERP app.",
+  "icons": [
+    {"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"./icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"maskable"},
+    {"src":"./icon-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
   ]
 }
